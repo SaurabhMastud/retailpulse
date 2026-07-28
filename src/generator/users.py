@@ -26,6 +26,20 @@ def build_user_profiles(
     return profiles
 
 
+def build_user_activity_weights(user_ids: list[str], rng: random.Random) -> list[float]:
+    """Give each user a Zipf-like activity weight so a minority of "regulars"
+    account for a disproportionate share of events, instead of every user
+    being equally likely to show up -- matches real traffic much better than
+    a uniform pick and gives later "top users" / retention analysis something
+    to actually find.
+    """
+    # Zipf-style: rank users 1..N, weight ~ 1/rank, then shuffle which user
+    # gets which rank so it's not correlated with user_id order.
+    ranks = list(range(1, len(user_ids) + 1))
+    rng.shuffle(ranks)
+    return [1.0 / rank for rank in ranks]
+
+
 def pick_product_for_user(
     rng: random.Random,
     catalog: list[dict],
