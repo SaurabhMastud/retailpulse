@@ -112,6 +112,21 @@ def ingest(source_path: str | Path, warehouse_path: str | Path) -> dict:
     }
 
 
+def format_ingest_summary(result: dict) -> str:
+    """Render an ingest() result as human-readable lines.
+
+    Pulled out of main() so other entrypoints (the day-5 Airflow DAG, in
+    particular) can log the same summary without shelling out to this CLI.
+    """
+    lines = [
+        f"Read {result['read']} events, loaded {result['loaded']}, "
+        f"duplicates {result['duplicates']}, rejected {result['rejected']}"
+    ]
+    for event, error in result["errors"]:
+        lines.append(f"  rejected {event.get('event_id', '<unknown>')}: {error}")
+    return "\n".join(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Ingest raw JSONL events into the DuckDB warehouse.")
     parser.add_argument("--source", type=str, required=True, help="path to a JSONL events file")
@@ -124,12 +139,7 @@ def main() -> None:
     args = parser.parse_args()
 
     result = ingest(args.source, args.warehouse)
-    print(
-        f"Read {result['read']} events, loaded {result['loaded']}, "
-        f"duplicates {result['duplicates']}, rejected {result['rejected']}"
-    )
-    for event, error in result["errors"]:
-        print(f"  rejected {event.get('event_id', '<unknown>')}: {error}")
+    print(format_ingest_summary(result))
 
 
 if __name__ == "__main__":

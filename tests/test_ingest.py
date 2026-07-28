@@ -1,6 +1,6 @@
 import json
 
-from src.ingestion.ingest import RAW_EVENTS_TABLE, ingest
+from src.ingestion.ingest import RAW_EVENTS_TABLE, format_ingest_summary, ingest
 
 
 def _write_jsonl(tmp_path, events, name="events.jsonl"):
@@ -140,3 +140,26 @@ def test_ingest_dedupes_repeated_event_id_within_same_batch(tmp_path):
     assert count == 1
     assert result["loaded"] == 1
     assert result["duplicates"] == 1
+
+
+def test_format_ingest_summary_includes_counts_and_rejections():
+    result = {
+        "read": 3,
+        "loaded": 1,
+        "duplicates": 1,
+        "rejected": 1,
+        "errors": [({"event_id": "bad1"}, "unknown event_type: 'refund'")],
+    }
+    summary = format_ingest_summary(result)
+    assert "Read 3 events" in summary
+    assert "loaded 1" in summary
+    assert "duplicates 1" in summary
+    assert "rejected 1" in summary
+    assert "bad1" in summary
+    assert "unknown event_type" in summary
+
+
+def test_format_ingest_summary_handles_no_errors():
+    result = {"read": 2, "loaded": 2, "duplicates": 0, "rejected": 0, "errors": []}
+    summary = format_ingest_summary(result)
+    assert summary == "Read 2 events, loaded 2, duplicates 0, rejected 0"
