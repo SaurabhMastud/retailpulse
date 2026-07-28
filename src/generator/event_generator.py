@@ -15,6 +15,7 @@ from pathlib import Path
 
 from src.generator.catalog import build_catalog
 from src.generator.schema import CART_EVENT_TYPES, EVENT_TYPE_WEIGHTS, EVENT_TYPES
+from src.generator.users import build_user_profiles, pick_product_for_user
 
 
 def _random_timestamp(rng: random.Random, window_minutes: int = 60) -> str:
@@ -33,15 +34,17 @@ def generate_events(
     rng = random.Random(seed)
     catalog = build_catalog(num_products=num_products, seed=seed)
     user_ids = [f"U{i:05d}" for i in range(num_users)]
+    user_profiles = build_user_profiles(user_ids, rng)
 
     events = []
     for _ in range(count):
         event_type = rng.choices(EVENT_TYPES, weights=EVENT_TYPE_WEIGHTS, k=1)[0]
-        product = rng.choice(catalog)
+        user_id = rng.choice(user_ids)
+        product = pick_product_for_user(rng, catalog, user_profiles[user_id])
         event = {
             "event_id": str(uuid.uuid4()),
             "event_type": event_type,
-            "user_id": rng.choice(user_ids),
+            "user_id": user_id,
             "product_id": product["product_id"],
             "product_category": product["product_category"],
             "timestamp": _random_timestamp(rng),
