@@ -35,3 +35,23 @@ def test_same_seed_is_deterministic():
     b = generate_events(count=30, seed=99)
     key = lambda events: [(e["user_id"], e["product_id"], e["event_type"]) for e in events]
     assert key(a) == key(b)
+
+
+def test_events_are_grouped_into_sessions_by_same_user():
+    events = generate_events(count=300, seed=42, max_session_length=4)
+    sessions: dict[str, set[str]] = {}
+    for event in events:
+        sessions.setdefault(event["session_id"], set()).add(event["user_id"])
+
+    # every session belongs to exactly one user, and there's more than one
+    # event per session on average (otherwise "sessions" would be pointless)
+    assert all(len(users) == 1 for users in sessions.values())
+    assert len(sessions) < len(events)
+
+
+def test_session_events_are_capped_at_max_length():
+    events = generate_events(count=100, seed=7, max_session_length=3)
+    counts: dict[str, int] = {}
+    for event in events:
+        counts[event["session_id"]] = counts.get(event["session_id"], 0) + 1
+    assert all(c <= 3 for c in counts.values())

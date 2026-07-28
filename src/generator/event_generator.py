@@ -18,10 +18,10 @@ from src.generator.schema import CART_EVENT_TYPES, EVENT_TYPE_WEIGHTS, EVENT_TYP
 from src.generator.users import build_user_activity_weights, build_user_profiles, pick_product_for_user
 
 
-def _random_timestamp(rng: random.Random, window_minutes: int = 60) -> str:
+def _random_session_start(rng: random.Random, window_minutes: int = 60) -> datetime:
     now = datetime.now(timezone.utc)
     offset = timedelta(seconds=rng.uniform(0, window_minutes * 60))
-    return (now - offset).isoformat()
+    return now - offset
 
 
 def generate_events(
@@ -29,8 +29,15 @@ def generate_events(
     num_users: int = 200,
     num_products: int = 60,
     seed: int | None = None,
+    max_session_length: int = 4,
 ) -> list[dict]:
-    """Generate `count` synthetic events as a list of dicts."""
+    """Generate `count` synthetic events as a list of dicts.
+
+    Events are grouped into browsing sessions (1 to `max_session_length`
+    events each) that share a `session_id` and land close together in time --
+    real visits aren't a shuffled bag of independent actions, and session
+    grouping is what makes a funnel_conversion mart (day 4) possible at all.
+    """
     rng = random.Random(seed)
     catalog = build_catalog(num_products=num_products, seed=seed)
     user_ids = [f"U{i:05d}" for i in range(num_users)]
@@ -38,22 +45,29 @@ def generate_events(
     user_weights = build_user_activity_weights(user_ids, rng)
 
     events = []
-    for _ in range(count):
-        event_type = rng.choices(EVENT_TYPES, weights=EVENT_TYPE_WEIGHTS, k=1)[0]
+    while len(events) < count:
+        session_id = str(uuid.uuid4())
         user_id = rng.choices(user_ids, weights=user_weights, k=1)[0]
-        product = pick_product_for_user(rng, catalog, user_profiles[user_id])
-        event = {
-            "event_id": str(uuid.uuid4()),
-            "event_type": event_type,
-            "user_id": user_id,
-            "product_id": product["product_id"],
-            "product_category": product["product_category"],
-            "timestamp": _random_timestamp(rng),
-        }
-        if event_type in CART_EVENT_TYPES:
-            event["price"] = product["price"]
-            event["quantity"] = rng.randint(1, 3)
-        events.append(event)
+        session_length = min(rng.randint(1, max_session_length), count - len(events))
+        session_start = _random_session_start(rng)
+
+        for i in range(session_length):
+            event_type = rng.choices(EVENT_TYPES, weights=EVENT_TYPE_WEIGHTS, k=1)[0]
+            product = pick_product_for_user(rng, catalog, user_profiles[user_id])
+            timestamp = session_start + timedelta(seconds=i * rng.uniform(5, 90))
+            event = {
+                "event_id": str(uuid.uuid4()),
+                "event_type": event_type,
+                "user_id": user_id,
+                "session_id": session_id,
+                "product_id": product["product_id"],
+                "product_category": product["product_category"],
+                "timestamp": timestamp.isoformat(),
+            }
+            if event_type in CART_EVENT_TYPES:
+                event["price"] = product["price"]
+                event["quantity"] = rng.randint(1, 3)
+            events.append(event)
     return events
 
 

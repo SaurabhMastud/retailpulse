@@ -6,6 +6,7 @@ VALID_PAGE_VIEW = {
     "event_id": "e1",
     "event_type": "page_view",
     "user_id": "u1",
+    "session_id": "s1",
     "product_id": "p1",
     "product_category": "books",
     "timestamp": "2026-07-28T00:00:00+00:00",

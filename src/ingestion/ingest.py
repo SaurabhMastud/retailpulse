@@ -1,9 +1,8 @@
 """Loads validated raw events from a JSONL landing file into DuckDB.
 
-This is deliberately the dumbest possible "ingestion" -- read file, validate
-rows, append to a raw_events table. Day 2 hardens this (batching, dedup on
-event_id, quarantine table for invalid rows) once there's a real pipeline
-around it to harden against.
+Reads a JSONL landing file, validates each event, quarantines invalid ones,
+and upserts the rest into `raw_events` (idempotent on `event_id`, both across
+re-runs and within a single batch).
 """
 from __future__ import annotations
 
@@ -23,6 +22,7 @@ CREATE TABLE IF NOT EXISTS {RAW_EVENTS_TABLE} (
     event_id VARCHAR PRIMARY KEY,
     event_type VARCHAR,
     user_id VARCHAR,
+    session_id VARCHAR,
     product_id VARCHAR,
     product_category VARCHAR,
     price DOUBLE,
@@ -73,8 +73,8 @@ def ingest(source_path: str | Path, warehouse_path: str | Path) -> dict:
             returned = con.execute(
                 f"""
                 INSERT INTO {RAW_EVENTS_TABLE}
-                    (event_id, event_type, user_id, product_id, product_category, price, quantity, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (event_id, event_type, user_id, session_id, product_id, product_category, price, quantity, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (event_id) DO NOTHING
                 RETURNING event_id
                 """,
@@ -82,6 +82,7 @@ def ingest(source_path: str | Path, warehouse_path: str | Path) -> dict:
                     event["event_id"],
                     event["event_type"],
                     event["user_id"],
+                    event["session_id"],
                     event["product_id"],
                     event["product_category"],
                     event.get("price"),

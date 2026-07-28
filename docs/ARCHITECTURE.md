@@ -35,6 +35,7 @@ event_generator.py --> data/raw/*.jsonl --> ingest.py --> data/warehouse/retailp
   "event_id": "uuid",
   "event_type": "page_view | add_to_cart | purchase",
   "user_id": "string",
+  "session_id": "uuid, shared by all events in one browsing session",
   "product_id": "string",
   "product_category": "string",
   "price": "float, present on add_to_cart/purchase",
@@ -42,6 +43,8 @@ event_generator.py --> data/raw/*.jsonl --> ingest.py --> data/warehouse/retailp
   "timestamp": "ISO-8601 UTC"
 }
 ```
+
+Events are generated in sessions (1-4 events, same user, clustered timestamps) rather than as independent draws -- `session_id` is what will let the day-4 `funnel_conversion` mart group page_view → add_to_cart → purchase per visit instead of per random event.
 
 ## Day-by-day plan
 
