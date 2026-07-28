@@ -16,6 +16,7 @@ import duckdb
 from src.ingestion.validate import validate_batch
 
 RAW_EVENTS_TABLE = "raw_events"
+QUARANTINE_TABLE = "quarantined_events"
 
 CREATE_TABLE_SQL = f"""
 CREATE TABLE IF NOT EXISTS {RAW_EVENTS_TABLE} (
@@ -27,6 +28,17 @@ CREATE TABLE IF NOT EXISTS {RAW_EVENTS_TABLE} (
     price DOUBLE,
     quantity INTEGER,
     timestamp TIMESTAMP
+)
+"""
+
+# Raw JSON + reason kept side by side so a bad event can be inspected and
+# replayed later without needing the original source file.
+CREATE_QUARANTINE_TABLE_SQL = f"""
+CREATE TABLE IF NOT EXISTS {QUARANTINE_TABLE} (
+    event_id VARCHAR,
+    raw_event VARCHAR,
+    error VARCHAR,
+    quarantined_at TIMESTAMP DEFAULT current_timestamp
 )
 """
 
@@ -49,6 +61,8 @@ def ingest(source_path: str | Path, warehouse_path: str | Path) -> dict:
     con = duckdb.connect(str(warehouse_path))
     try:
         con.execute(CREATE_TABLE_SQL)
+        con.execute(CREATE_QUARANTINE_TABLE_SQL)
+
         loaded = 0
         for event in valid:
             con.execute(
@@ -70,6 +84,12 @@ def ingest(source_path: str | Path, warehouse_path: str | Path) -> dict:
                 ],
             )
             loaded += 1
+
+        for event, error in invalid:
+            con.execute(
+                f"INSERT INTO {QUARANTINE_TABLE} (event_id, raw_event, error) VALUES (?, ?, ?)",
+                [event.get("event_id"), json.dumps(event), error],
+            )
     finally:
         con.close()
 
