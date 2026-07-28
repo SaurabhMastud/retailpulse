@@ -64,13 +64,19 @@ def ingest(source_path: str | Path, warehouse_path: str | Path) -> dict:
         con.execute(CREATE_QUARANTINE_TABLE_SQL)
 
         loaded = 0
+        duplicates = 0
         for event in valid:
-            con.execute(
+            # RETURNING tells us whether the row actually landed (vs. being
+            # skipped by ON CONFLICT) -- covers both re-running the same
+            # source file and duplicate event_ids within one batch, since
+            # DuckDB commits each statement immediately.
+            returned = con.execute(
                 f"""
                 INSERT INTO {RAW_EVENTS_TABLE}
                     (event_id, event_type, user_id, product_id, product_category, price, quantity, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (event_id) DO NOTHING
+                RETURNING event_id
                 """,
                 [
                     event["event_id"],
@@ -82,8 +88,11 @@ def ingest(source_path: str | Path, warehouse_path: str | Path) -> dict:
                     event.get("quantity"),
                     event["timestamp"],
                 ],
-            )
-            loaded += 1
+            ).fetchall()
+            if returned:
+                loaded += 1
+            else:
+                duplicates += 1
 
         for event, error in invalid:
             con.execute(
@@ -93,7 +102,13 @@ def ingest(source_path: str | Path, warehouse_path: str | Path) -> dict:
     finally:
         con.close()
 
-    return {"read": len(events), "loaded": loaded, "rejected": len(invalid), "errors": invalid}
+    return {
+        "read": len(events),
+        "loaded": loaded,
+        "duplicates": duplicates,
+        "rejected": len(invalid),
+        "errors": invalid,
+    }
 
 
 def main() -> None:
@@ -108,7 +123,10 @@ def main() -> None:
     args = parser.parse_args()
 
     result = ingest(args.source, args.warehouse)
-    print(f"Read {result['read']} events, loaded {result['loaded']}, rejected {result['rejected']}")
+    print(
+        f"Read {result['read']} events, loaded {result['loaded']}, "
+        f"duplicates {result['duplicates']}, rejected {result['rejected']}"
+    )
     for event, error in result["errors"]:
         print(f"  rejected {event.get('event_id', '<unknown>')}: {error}")
 

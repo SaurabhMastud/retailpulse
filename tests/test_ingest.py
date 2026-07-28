@@ -38,7 +38,7 @@ def test_ingest_loads_valid_events(tmp_path):
     warehouse = tmp_path / "test.duckdb"
 
     result = ingest(source, warehouse)
-    assert result == {"read": 2, "loaded": 2, "rejected": 0, "errors": []}
+    assert result == {"read": 2, "loaded": 2, "duplicates": 0, "rejected": 0, "errors": []}
 
     con = duckdb.connect(str(warehouse))
     count = con.execute(f"SELECT COUNT(*) FROM {RAW_EVENTS_TABLE}").fetchone()[0]
@@ -96,3 +96,40 @@ def test_ingest_is_idempotent_on_rerun(tmp_path):
     count = con.execute(f"SELECT COUNT(*) FROM {RAW_EVENTS_TABLE}").fetchone()[0]
     con.close()
     assert count == 1  # no duplicate row from the second ingest run
+    assert result["loaded"] == 0
+    assert result["duplicates"] == 1
+
+
+def test_ingest_dedupes_repeated_event_id_within_same_batch(tmp_path):
+    # Same event_id twice in one source file -- should land once, not error.
+    events = [
+        {
+            "event_id": "same-id",
+            "event_type": "page_view",
+            "user_id": "u1",
+            "product_id": "p1",
+            "product_category": "books",
+            "timestamp": "2026-07-28T00:00:00+00:00",
+        },
+        {
+            "event_id": "same-id",
+            "event_type": "page_view",
+            "user_id": "u1",
+            "product_id": "p1",
+            "product_category": "books",
+            "timestamp": "2026-07-28T00:00:05+00:00",
+        },
+    ]
+    source = _write_jsonl(tmp_path, events)
+    warehouse = tmp_path / "test4.duckdb"
+
+    result = ingest(source, warehouse)
+
+    import duckdb
+
+    con = duckdb.connect(str(warehouse))
+    count = con.execute(f"SELECT COUNT(*) FROM {RAW_EVENTS_TABLE}").fetchone()[0]
+    con.close()
+    assert count == 1
+    assert result["loaded"] == 1
+    assert result["duplicates"] == 1
