@@ -1,0 +1,28 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: main
+    tables:
+      - name: raw_events
+      - name: quarantined_events
+
+models:
+  - name: stg_events
+    description: Typed, renamed view over raw_events (one row per event; event_id is unique because ingestion upserts on it).
+    columns:
+      - name: event_id
+        tests:
+          - unique
+          - not_null
+      - name: event_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['page_view', 'add_to_cart', 'purchase']
+      - name: user_id
+        tests:
+          - not_null
+      - name: session_id
+        tests:
+          - not_null
