@@ -63,3 +63,5 @@ Events are generated in sessions (1-4 events, same user, clustered timestamps) r
 - **DuckDB over Postgres**: no server process to manage for a solo daily-build project, still real SQL + dbt-compatible, upgrade path to Postgres/Snowflake later is just a dbt profile change.
 - **Synthetic data over a public dataset**: full control over volume/schema/day-to-day evolution, matches the "day 2 hardens ingestion" plan without waiting on external data quirks.
 - **Airflow over a lighter scheduler (e.g. Prefect)**: still the most commonly required orchestrator in job postings; worth the extra setup weight for portfolio value.
+- **In-repo `dbt/profiles.yml` over `~/.dbt/profiles.yml`**: keeps the project runnable with a plain `git clone` + `dbt run --profiles-dir .`, no machine-specific setup step to document.
+- **A plain singular test (`dbt/tests/assert_*.sql`) over adding `dbt_utils` for the price/quantity range check**: one query does the whole job; not worth a package dependency for a single check.
