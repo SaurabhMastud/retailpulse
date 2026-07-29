@@ -9,6 +9,7 @@ venv/
 dbt/target/
 dbt/dbt_packages/
 dbt/logs/
+dbt/.user.yml
 
 ## Data (raw/generated data stays local, not versioned)
 data/raw/*
