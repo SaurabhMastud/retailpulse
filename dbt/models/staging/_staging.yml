@@ -26,3 +26,13 @@ models:
       - name: session_id
         tests:
           - not_null
+
+  - name: stg_quarantined_events
+    description: Typed, renamed view over quarantined_events (invalid events rejected by ingestion, kept for inspection/replay). event_id may be null -- a missing event_id is itself one of the rejection reasons.
+    columns:
+      - name: error
+        tests:
+          - not_null
+      - name: quarantined_at
+        tests:
+          - not_null
