@@ -11,3 +11,13 @@ models:
       - name: gross_revenue
         tests:
           - not_null
+
+  - name: funnel_conversion
+    description: Single-row funnel over all sessions to date -- page_view -> add_to_cart -> purchase counts and stage-to-stage conversion rates.
+    columns:
+      - name: total_sessions
+        tests:
+          - not_null
+      - name: sessions_with_page_view
+        tests:
+          - not_null
