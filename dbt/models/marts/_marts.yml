@@ -21,3 +21,14 @@ models:
       - name: sessions_with_page_view
         tests:
           - not_null
+
+  - name: top_products
+    description: One row per product_id with purchase counts, units sold, and gross revenue, ranked by revenue. Assumes a product_id always maps to the same product_category -- enforced by the unique test below.
+    columns:
+      - name: product_id
+        tests:
+          - unique
+          - not_null
+      - name: gross_revenue
+        tests:
+          - not_null
