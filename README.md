@@ -28,7 +28,6 @@ dashboard/          Streamlit app (app.py = layout, queries.py = warehouse reads
 data/               local raw/warehouse storage (git-ignored, kept via .gitkeep)
 tests/              pytest suite across generator, ingestion, pipeline, dbt, dashboard
 docs/               architecture notes + the day-7 PDF report
-SESSION_LOG.md      daily progress log for this project
 ```
 
 ## Running it
@@ -80,4 +79,5 @@ queries against a real scratch warehouse.
 
 ## Status
 
-See `SESSION_LOG.md` for day-by-day progress and `../../MEMORY.md` for the overall rotation this project fits into.
+Built over a week of daily sessions. `docs/ARCHITECTURE.md` carries the
+decisions log, written as the project went rather than reconstructed at the end.

@@ -30,6 +30,9 @@ logs/
 ## github-log skill run state (ephemeral)
 .github-log-state.json
 
+## Daily session log -- kept locally, deliberately not published
+SESSION_LOG.md
+
 ## Env & secrets
 .env
 *.local
