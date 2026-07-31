@@ -11,6 +11,7 @@ push the result without re-parsing stdout.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -109,18 +110,28 @@ def ingest_step(
     }
 
 
-def run_dbt(command: str, dbt_dir: str | Path = DBT_DIR) -> dict:
+def run_dbt(
+    command: str, dbt_dir: str | Path = DBT_DIR, warehouse: str | Path | None = None
+) -> dict:
     """Run a dbt subcommand against the in-repo profile.
 
     Shells out rather than using dbt's programmatic runner: it's the same thing
     the DAG's operator would do, and it keeps dbt's own exit code as the single
     source of truth for pass/fail.
+
+    `warehouse` overrides the profile's target path via RETAILPULSE_WAREHOUSE,
+    so models can be built into a scratch database without editing profiles.yml.
     """
+    env = None
+    if warehouse is not None:
+        env = {**os.environ, "RETAILPULSE_WAREHOUSE": str(Path(warehouse).resolve())}
+
     completed = subprocess.run(
         [sys.executable, "-m", "dbt.cli.main", command, "--profiles-dir", "."],
         cwd=str(dbt_dir),
         capture_output=True,
         text=True,
+        env=env,
     )
     result = {
         "command": command,
@@ -143,8 +154,8 @@ def run_pipeline(
     """Run all four steps in order. Raises on the first failure."""
     generated = generate_step(count=count, days=days, seed=seed, raw_dir=raw_dir)
     ingested = ingest_step(generated["path"], warehouse=warehouse, batch_id=generated["batch_id"])
-    dbt_run = run_dbt("run")
-    dbt_test = run_dbt("test")
+    dbt_run = run_dbt("run", warehouse=warehouse)
+    dbt_test = run_dbt("test", warehouse=warehouse)
     return {
         "generate": generated,
         "ingest": ingested,

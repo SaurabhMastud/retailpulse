@@ -3,5 +3,7 @@ retailpulse:
   outputs:
     dev:
       type: duckdb
-      path: "../data/warehouse/retailpulse.duckdb"
+      # Overridable so a test (or a throwaway backfill) can build the models
+      # into a scratch warehouse instead of the working one.
+      path: "{{ env_var('RETAILPULSE_WAREHOUSE', '../data/warehouse/retailpulse.duckdb') }}"
       threads: 4
