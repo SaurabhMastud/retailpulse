@@ -45,7 +45,9 @@ def generate_events(
     date to group by -- a single-day spread makes a daily trend meaningless.
     """
     rng = random.Random(seed)
-    catalog = build_catalog(num_products=num_products, seed=seed)
+    # deliberately not seeded with `seed`: the catalog is a stable reference
+    # dimension shared by every batch (see catalog.CATALOG_SEED)
+    catalog = build_catalog(num_products=num_products)
     user_ids = [f"U{i:05d}" for i in range(num_users)]
     user_profiles = build_user_profiles(user_ids, rng)
     user_weights = build_user_activity_weights(user_ids, rng)

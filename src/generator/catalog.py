@@ -8,9 +8,16 @@ import random
 
 from src.generator.schema import PRODUCT_CATEGORIES
 
+# The catalog is a reference dimension, not per-batch random data: a given
+# product_id has to map to the same category and price in every batch, or the
+# warehouse sees one product under two categories and marts grained on
+# (date, product_id) split into duplicate rows. Seeding it independently of the
+# event-generation seed is what keeps that stable across runs.
+CATALOG_SEED = 20260728
 
-def build_catalog(num_products: int = 60, seed: int | None = None) -> list[dict]:
-    """Build a deterministic-if-seeded list of {product_id, category, price} dicts."""
+
+def build_catalog(num_products: int = 60, seed: int | None = CATALOG_SEED) -> list[dict]:
+    """Build the product catalog -- stable across runs unless `seed` is overridden."""
     rng = random.Random(seed)
     catalog = []
     for i in range(num_products):

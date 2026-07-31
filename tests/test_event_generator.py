@@ -59,6 +59,19 @@ def test_session_events_are_capped_at_max_length():
     assert all(c <= 3 for c in counts.values())
 
 
+def test_product_catalog_is_stable_across_differently_seeded_batches():
+    # a product_id must carry the same category and price in every batch --
+    # otherwise date-grained marts split one product into duplicate rows
+    def mapping(events):
+        return {e["product_id"]: e["product_category"] for e in events}
+
+    a = mapping(generate_events(count=300, seed=1))
+    b = mapping(generate_events(count=300, seed=2))
+    shared = a.keys() & b.keys()
+    assert shared, "batches should overlap on products"
+    assert all(a[pid] == b[pid] for pid in shared)
+
+
 def test_events_within_a_session_are_in_chronological_order():
     # the funnel mart attributes a session to its first event's date, so
     # per-session timestamps have to be non-decreasing in emission order
