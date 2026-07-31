@@ -19,24 +19,64 @@ event generator  -->  raw landing zone  -->  staging models (dbt)  -->  mart mod
 ## Project layout
 
 ```
-src/generator/     synthetic e-commerce event generator
+src/generator/      synthetic e-commerce event generator
 src/ingestion/      lands raw events (data/raw) into the warehouse (data/warehouse)
-dbt/                dbt project: staging + mart models
-dags/               Airflow DAGs orchestrating generate -> ingest -> transform
-dashboard/          Streamlit app reading from the warehouse
+src/pipeline.py     the four pipeline steps as plain functions, plus a CLI
+dbt/                dbt project: staging + mart models, schema and singular tests
+dags/               Airflow DAG wiring the pipeline steps, scheduled daily
+dashboard/          Streamlit app (app.py = layout, queries.py = warehouse reads)
 data/               local raw/warehouse storage (git-ignored, kept via .gitkeep)
-tests/              unit tests for generator/ingestion logic
+tests/              pytest suite across generator, ingestion, pipeline, dbt, dashboard
 docs/               architecture notes + the day-7 PDF report
 SESSION_LOG.md      daily progress log for this project
 ```
 
-## Running it (day 1 slice)
+## Running it
 
 ```bash
 pip install -r requirements.txt
-python -m src.generator.event_generator --count 500 --out data/raw/events.jsonl
-python -m src.ingestion.ingest --source data/raw/events.jsonl
+python -m src.pipeline --count 1000      # generate -> ingest -> dbt run -> dbt test
+streamlit run dashboard/app.py
 ```
+
+Individual steps, if you want them separately:
+
+```bash
+python -m src.generator.event_generator --count 500 --days 14 --out data/raw/events.jsonl
+python -m src.ingestion.ingest --source data/raw/events.jsonl
+cd dbt && dbt build --profiles-dir .
+```
+
+The Airflow DAG (`dags/retailpulse_pipeline.py`) runs the same four steps on a
+daily schedule — see [`dags/README.md`](dags/README.md). It needs Linux, WSL, or
+Docker; Airflow has no native Windows support, which is exactly why the steps
+live in `src/pipeline.py` and the DAG is only wiring.
+
+## Data model
+
+| Table | Grain | What it answers |
+|---|---|---|
+| `stg_events` | one event | typed, renamed view over `raw_events` |
+| `stg_quarantined_events` | one rejected event | what failed validation, and why |
+| `stg_pipeline_runs` | one ingest | batch row counts and reject rate |
+| `daily_revenue` | date | revenue, purchases, purchasing users per day |
+| `funnel_conversion` | session start date | view → cart → purchase counts and rates per day |
+| `top_products` | date × product | purchases, units, revenue per product per day |
+
+Marts sit at the finest useful grain so any window can be rolled up downstream;
+an all-time table can only answer one question.
+
+## Tests
+
+```bash
+python -m pytest tests/ -q
+```
+
+53 tests plus one that's skipped unless Airflow is installed. The suite covers
+generator distributions and determinism, ingest validation/quarantine/
+idempotency, the pipeline steps and their run auditing, a `dbt parse` guard, the
+DAG's task wiring (at AST level, so it runs without Airflow), and the dashboard
+queries against a real scratch warehouse.
 
 ## Status
 
