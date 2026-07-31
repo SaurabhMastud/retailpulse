@@ -30,11 +30,18 @@ models:
           - not_null
 
   - name: top_products
-    description: One row per product_id with purchase counts, units sold, and gross revenue, ranked by revenue. Assumes a product_id always maps to the same product_category -- enforced by the unique test below.
+    description: >
+      One row per (event_date, product_id) with purchase counts, units sold and
+      gross revenue. Daily grain so any window can be rolled up downstream. The
+      composite key is asserted by tests/assert_top_products_grain_is_unique.sql
+      and the product_id -> product_category assumption by
+      tests/assert_product_id_maps_to_one_category.sql.
     columns:
+      - name: event_date
+        tests:
+          - not_null
       - name: product_id
         tests:
-          - unique
           - not_null
       - name: gross_revenue
         tests:
