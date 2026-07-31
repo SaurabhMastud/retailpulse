@@ -13,8 +13,15 @@ models:
           - not_null
 
   - name: funnel_conversion
-    description: Single-row funnel over all sessions to date -- page_view -> add_to_cart -> purchase counts and stage-to-stage conversion rates.
+    description: >
+      One row per session start date -- page_view -> add_to_cart -> purchase
+      session counts and stage-to-stage conversion rates for that day. Sessions
+      are attributed to the date of their first event.
     columns:
+      - name: session_date
+        tests:
+          - unique
+          - not_null
       - name: total_sessions
         tests:
           - not_null

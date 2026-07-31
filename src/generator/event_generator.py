@@ -18,9 +18,10 @@ from src.generator.schema import CART_EVENT_TYPES, EVENT_TYPE_WEIGHTS, EVENT_TYP
 from src.generator.users import build_user_activity_weights, build_user_profiles, pick_product_for_user
 
 
-def _random_session_start(rng: random.Random, window_minutes: int = 60) -> datetime:
+def _random_session_start(rng: random.Random, days: int = 1) -> datetime:
+    """Pick a session start uniformly within the last `days` days."""
     now = datetime.now(timezone.utc)
-    offset = timedelta(seconds=rng.uniform(0, window_minutes * 60))
+    offset = timedelta(seconds=rng.uniform(0, days * 24 * 60 * 60))
     return now - offset
 
 
@@ -30,13 +31,18 @@ def generate_events(
     num_products: int = 60,
     seed: int | None = None,
     max_session_length: int = 4,
+    days: int = 14,
 ) -> list[dict]:
     """Generate `count` synthetic events as a list of dicts.
 
     Events are grouped into browsing sessions (1 to `max_session_length`
     events each) that share a `session_id` and land close together in time --
     real visits aren't a shuffled bag of independent actions, and session
-    grouping is what makes a funnel_conversion mart (day 4) possible at all.
+    grouping is what makes the funnel_conversion mart possible at all.
+
+    Session starts are spread over the last `days` days so the date-grained
+    marts (daily_revenue, funnel_conversion, top_products) have more than one
+    date to group by -- a single-day spread makes a daily trend meaningless.
     """
     rng = random.Random(seed)
     catalog = build_catalog(num_products=num_products, seed=seed)
@@ -49,12 +55,14 @@ def generate_events(
         session_id = str(uuid.uuid4())
         user_id = rng.choices(user_ids, weights=user_weights, k=1)[0]
         session_length = min(rng.randint(1, max_session_length), count - len(events))
-        session_start = _random_session_start(rng)
+        session_start = _random_session_start(rng, days=days)
+        elapsed = 0.0
 
-        for i in range(session_length):
+        for _ in range(session_length):
             event_type = rng.choices(EVENT_TYPES, weights=EVENT_TYPE_WEIGHTS, k=1)[0]
             product = pick_product_for_user(rng, catalog, user_profiles[user_id])
-            timestamp = session_start + timedelta(seconds=i * rng.uniform(5, 90))
+            timestamp = session_start + timedelta(seconds=elapsed)
+            elapsed += rng.uniform(5, 90)
             event = {
                 "event_id": str(uuid.uuid4()),
                 "event_type": event_type,
@@ -84,9 +92,12 @@ def main() -> None:
     parser.add_argument("--count", type=int, default=500, help="number of events to generate")
     parser.add_argument("--out", type=str, default="data/raw/events.jsonl", help="output JSONL path")
     parser.add_argument("--seed", type=int, default=None, help="random seed for reproducibility")
+    parser.add_argument(
+        "--days", type=int, default=14, help="spread session start times over the last N days"
+    )
     args = parser.parse_args()
 
-    events = generate_events(count=args.count, seed=args.seed)
+    events = generate_events(count=args.count, seed=args.seed, days=args.days)
     write_jsonl(events, args.out)
     print(f"Wrote {len(events)} events to {args.out}")
 

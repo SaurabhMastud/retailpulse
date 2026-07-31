@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from src.generator.event_generator import generate_events
 from src.generator.schema import EVENT_TYPES, REQUIRED_FIELDS
 
@@ -55,3 +57,34 @@ def test_session_events_are_capped_at_max_length():
     for event in events:
         counts[event["session_id"]] = counts.get(event["session_id"], 0) + 1
     assert all(c <= 3 for c in counts.values())
+
+
+def test_events_within_a_session_are_in_chronological_order():
+    # the funnel mart attributes a session to its first event's date, so
+    # per-session timestamps have to be non-decreasing in emission order
+    events = generate_events(count=400, seed=11, max_session_length=4)
+    last_seen: dict[str, datetime] = {}
+    for event in events:
+        ts = datetime.fromisoformat(event["timestamp"])
+        previous = last_seen.get(event["session_id"])
+        if previous is not None:
+            assert ts >= previous
+        last_seen[event["session_id"]] = ts
+
+
+def test_events_span_multiple_days_when_days_is_set():
+    events = generate_events(count=400, seed=13, days=14)
+    dates = {datetime.fromisoformat(e["timestamp"]).date() for e in events}
+    # 400 events uniformly spread over 14 days should touch most of them;
+    # a lower bound of 5 keeps the test from being flaky on unlucky draws
+    assert len(dates) >= 5
+
+
+def test_events_stay_within_the_requested_day_window():
+    events = generate_events(count=200, seed=17, days=3)
+    now = datetime.now(timezone.utc)
+    # sessions start within the window; trailing events in a session can run
+    # a few minutes past `now`, so allow a small slack on the upper bound
+    for event in events:
+        ts = datetime.fromisoformat(event["timestamp"])
+        assert now - timedelta(days=3) <= ts <= now + timedelta(minutes=10)
