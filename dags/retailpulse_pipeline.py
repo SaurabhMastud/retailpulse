@@ -48,7 +48,7 @@ def _generate(**context) -> dict:
 
 def _ingest(**context) -> dict:
     generated = context["ti"].xcom_pull(task_ids="generate_events")
-    result = pipeline.ingest_step(generated["path"])
+    result = pipeline.ingest_step(generated["path"], batch_id=generated["batch_id"])
     print(result["summary"])
     return result
 

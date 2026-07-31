@@ -16,6 +16,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import duckdb
+
 from src.generator.event_generator import generate_events, write_jsonl
 from src.ingestion.ingest import format_ingest_summary, ingest
 
@@ -23,6 +25,24 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_WAREHOUSE = PROJECT_ROOT / "data" / "warehouse" / "retailpulse.duckdb"
 DEFAULT_RAW_DIR = PROJECT_ROOT / "data" / "raw"
 DBT_DIR = PROJECT_ROOT / "dbt"
+
+PIPELINE_RUNS_TABLE = "pipeline_runs"
+
+# Run metadata lives here rather than in src/ingestion: ingest() is a library
+# call that loads a file, while "which batch ran, when, and how much of it was
+# rejected" is an orchestration-level fact. Without it, a batch that quietly
+# rejected half its rows is only visible in whatever captured the run's stdout.
+CREATE_PIPELINE_RUNS_SQL = f"""
+CREATE TABLE IF NOT EXISTS {PIPELINE_RUNS_TABLE} (
+    batch_id VARCHAR,
+    source_file VARCHAR,
+    events_read INTEGER,
+    events_loaded INTEGER,
+    duplicates INTEGER,
+    rejected INTEGER,
+    ingested_at TIMESTAMP DEFAULT current_timestamp
+)
+"""
 
 
 def generate_step(
@@ -45,10 +65,42 @@ def generate_step(
     return {"batch_id": batch_id, "path": str(out_path), "events": len(events)}
 
 
-def ingest_step(source_path: str | Path, warehouse: str | Path = DEFAULT_WAREHOUSE) -> dict:
+def record_run(warehouse: str | Path, batch_id: str, source_path: str | Path, result: dict) -> None:
+    """Append one row to `pipeline_runs` describing an ingest."""
+    con = duckdb.connect(str(warehouse))
+    try:
+        con.execute(CREATE_PIPELINE_RUNS_SQL)
+        con.execute(
+            f"""
+            INSERT INTO {PIPELINE_RUNS_TABLE}
+                (batch_id, source_file, events_read, events_loaded, duplicates, rejected)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                batch_id,
+                str(source_path),
+                result["read"],
+                result["loaded"],
+                result["duplicates"],
+                result["rejected"],
+            ],
+        )
+    finally:
+        con.close()
+
+
+def ingest_step(
+    source_path: str | Path,
+    warehouse: str | Path = DEFAULT_WAREHOUSE,
+    batch_id: str | None = None,
+) -> dict:
     result = ingest(source_path, warehouse)
+    # every ingest is audited, including retries -- a batch that appears twice
+    # with duplicates == read is exactly what a safe retry should look like
+    record_run(warehouse, batch_id or Path(source_path).stem, source_path, result)
     return {
         "source": str(source_path),
+        "batch_id": batch_id or Path(source_path).stem,
         "read": result["read"],
         "loaded": result["loaded"],
         "duplicates": result["duplicates"],
@@ -90,7 +142,7 @@ def run_pipeline(
 ) -> dict:
     """Run all four steps in order. Raises on the first failure."""
     generated = generate_step(count=count, days=days, seed=seed, raw_dir=raw_dir)
-    ingested = ingest_step(generated["path"], warehouse=warehouse)
+    ingested = ingest_step(generated["path"], warehouse=warehouse, batch_id=generated["batch_id"])
     dbt_run = run_dbt("run")
     dbt_test = run_dbt("test")
     return {

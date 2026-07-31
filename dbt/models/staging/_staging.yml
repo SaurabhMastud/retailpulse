@@ -6,6 +6,7 @@ sources:
     tables:
       - name: raw_events
       - name: quarantined_events
+      - name: pipeline_runs
 
 models:
   - name: stg_events
@@ -34,5 +35,22 @@ models:
         tests:
           - not_null
       - name: quarantined_at
+        tests:
+          - not_null
+
+  - name: stg_pipeline_runs
+    description: >
+      One row per ingest, with row counts and a derived reject_rate. Batch ids
+      repeat when a run is retried -- an idempotent retry shows up as a second
+      row with duplicates equal to events_read, which is the intended shape,
+      so batch_id is deliberately not unique-tested.
+    columns:
+      - name: batch_id
+        tests:
+          - not_null
+      - name: events_read
+        tests:
+          - not_null
+      - name: ingested_at
         tests:
           - not_null

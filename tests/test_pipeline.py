@@ -53,6 +53,40 @@ def test_ingest_step_is_idempotent_on_the_same_batch(tmp_path):
     assert second["duplicates"] == 15
 
 
+def test_ingest_step_records_a_pipeline_run_row(tmp_path):
+    warehouse = tmp_path / "test.duckdb"
+    generated = pipeline.generate_step(count=25, seed=5, raw_dir=tmp_path, batch_id="b1")
+    pipeline.ingest_step(generated["path"], warehouse=warehouse, batch_id="b1")
+
+    con = duckdb.connect(str(warehouse), read_only=True)
+    try:
+        row = con.execute(
+            "select batch_id, events_read, events_loaded, rejected from pipeline_runs"
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert row == [("b1", 25, 25, 0)]
+
+
+def test_retried_ingest_is_audited_as_a_second_all_duplicate_run(tmp_path):
+    # a safe retry should be visible as such, not hidden
+    warehouse = tmp_path / "test.duckdb"
+    generated = pipeline.generate_step(count=10, seed=6, raw_dir=tmp_path, batch_id="b2")
+    pipeline.ingest_step(generated["path"], warehouse=warehouse, batch_id="b2")
+    pipeline.ingest_step(generated["path"], warehouse=warehouse, batch_id="b2")
+
+    con = duckdb.connect(str(warehouse), read_only=True)
+    try:
+        runs = con.execute(
+            "select events_loaded, duplicates from pipeline_runs order by ingested_at, events_loaded desc"
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert runs == [(10, 0), (0, 10)]
+
+
 def test_run_dbt_raises_on_a_failing_command(tmp_path):
     # a directory with no dbt project in it -- dbt exits non-zero
     with pytest.raises(RuntimeError, match="dbt parse failed"):
