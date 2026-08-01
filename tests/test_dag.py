@@ -20,7 +20,7 @@ import pytest
 from src import pipeline
 
 DAG_PATH = Path(__file__).resolve().parent.parent / "dags" / "retailpulse_pipeline.py"
-EXPECTED_TASKS = ["generate_events", "ingest_events", "dbt_run", "dbt_test"]
+EXPECTED_TASKS = ["generate_events", "ingest_events", "dbt_seed", "dbt_run", "dbt_test"]
 
 
 @pytest.fixture(scope="module")
@@ -84,4 +84,5 @@ def test_dag_imports_and_has_the_right_shape():
     assert dag is not None
     assert sorted(t.task_id for t in dag.tasks) == sorted(EXPECTED_TASKS)
     assert dag.get_task("ingest_events").upstream_task_ids == {"generate_events"}
+    assert dag.get_task("dbt_run").upstream_task_ids == {"dbt_seed"}
     assert dag.get_task("dbt_test").upstream_task_ids == {"dbt_run"}

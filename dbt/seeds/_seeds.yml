@@ -1,0 +1,30 @@
+version: 2
+
+seeds:
+  - name: products
+    description: >
+      The product dimension: one row per product_id with its category and list
+      price. Generated from src/generator/catalog.py via
+      `python -m src.generator.catalog` -- never edited by hand, or it drifts
+      from the catalog the generator actually draws from. It gives the
+      warehouse an independent reference to check events against; without it,
+      product_category is only ever whatever the event stream claimed.
+    columns:
+      - name: product_id
+        tests:
+          - unique
+          - not_null
+      - name: product_category
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - electronics
+                - home_and_kitchen
+                - apparel
+                - beauty
+                - sports_and_outdoors
+                - books
+      - name: price
+        tests:
+          - not_null

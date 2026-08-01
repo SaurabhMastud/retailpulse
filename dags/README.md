@@ -3,10 +3,11 @@
 `retailpulse_pipeline.py` — one DAG, scheduled `@daily`:
 
 ```
-generate_events >> ingest_events >> dbt_run >> dbt_test
+generate_events >> ingest_events >> dbt_seed >> dbt_run >> dbt_test
 ```
 
-`dbt_test` raises on a non-zero dbt exit, so a data quality violation in the
+`dbt_seed` loads the product dimension from `dbt/seeds/products.csv` before
+anything refs it. `dbt_test` raises on a non-zero dbt exit, so a data quality violation in the
 marts fails the run instead of passing silently downstream.
 
 ## Why the DAG is thin
@@ -15,7 +16,7 @@ Every step is a function in [`src/pipeline.py`](../src/pipeline.py). This file
 is wiring and scheduling only. Two reasons:
 
 - the pipeline stays runnable and testable without Airflow — `python -m
-  src.pipeline` does the same four steps
+  src.pipeline` does the same steps
 - Airflow has **no native Windows support**, and this project is developed on
   Windows. Keeping the logic out of the DAG means the Windows box can still
   exercise the whole pipeline

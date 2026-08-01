@@ -1,4 +1,4 @@
-"""Airflow DAG: generate -> ingest -> dbt run -> dbt test, daily.
+"""Airflow DAG: generate -> ingest -> dbt seed -> dbt run -> dbt test, daily.
 
 Deliberately thin. Every step is a function in `src/pipeline.py`, which is
 where the logic and its tests live -- this file is wiring and scheduling only.
@@ -53,6 +53,12 @@ def _ingest(**context) -> dict:
     return result
 
 
+def _dbt_seed(**_) -> None:
+    # the product dimension is a reference table, not event data -- it's loaded
+    # from the repo's seed CSV, and models/tests ref it, so it goes first
+    pipeline.run_dbt("seed")
+
+
 def _dbt_run(**_) -> None:
     pipeline.run_dbt("run")
 
@@ -81,6 +87,10 @@ with DAG(
         task_id="ingest_events",
         python_callable=_ingest,
     )
+    dbt_seed = PythonOperator(
+        task_id="dbt_seed",
+        python_callable=_dbt_seed,
+    )
     dbt_run = PythonOperator(
         task_id="dbt_run",
         python_callable=_dbt_run,
@@ -90,4 +100,4 @@ with DAG(
         python_callable=_dbt_test,
     )
 
-    generate_events >> ingest_events >> dbt_run >> dbt_test
+    generate_events >> ingest_events >> dbt_seed >> dbt_run >> dbt_test

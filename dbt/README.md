@@ -4,10 +4,12 @@
 
 ```
 dbt debug --profiles-dir .
+dbt seed --profiles-dir .
 dbt run --profiles-dir .
 ```
 
-Will hold:
+Contents:
+- `seeds/products.csv` — the product dimension, **generated** by `python -m src.generator.catalog`; don't edit it by hand
 - `models/staging/` — typed, deduped views over `raw_events`
 - `models/marts/` — `daily_revenue`, `funnel_conversion`, `top_products`
 - `tests/` (dbt schema + custom tests) for null/uniqueness/accepted-values checks on the marts

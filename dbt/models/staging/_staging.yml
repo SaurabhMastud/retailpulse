@@ -27,6 +27,13 @@ models:
       - name: session_id
         tests:
           - not_null
+      - name: product_id
+        description: Every event names a product, and it has to be one the catalog knows about.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('products')
+              field: product_id
 
   - name: stg_quarantined_events
     description: Typed, renamed view over quarantined_events (invalid events rejected by ingestion, kept for inspection/replay). event_id may be null -- a missing event_id is itself one of the rejection reasons.

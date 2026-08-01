@@ -154,11 +154,15 @@ def run_pipeline(
     """Run all four steps in order. Raises on the first failure."""
     generated = generate_step(count=count, days=days, seed=seed, raw_dir=raw_dir)
     ingested = ingest_step(generated["path"], warehouse=warehouse, batch_id=generated["batch_id"])
+    # seeds first: the product dimension is a reference table the staging tests
+    # check events against, so it has to exist before anything refs it
+    dbt_seed = run_dbt("seed", warehouse=warehouse)
     dbt_run = run_dbt("run", warehouse=warehouse)
     dbt_test = run_dbt("test", warehouse=warehouse)
     return {
         "generate": generated,
         "ingest": ingested,
+        "dbt_seed": dbt_seed,
         "dbt_run": dbt_run,
         "dbt_test": dbt_test,
     }
@@ -174,6 +178,7 @@ def main() -> None:
     result = run_pipeline(count=args.count, days=args.days, seed=args.seed)
     print(f"Generated {result['generate']['events']} events -> {result['generate']['path']}")
     print(result["ingest"]["summary"])
+    print("dbt seed: ok")
     print("dbt run: ok")
     print("dbt test: ok")
 

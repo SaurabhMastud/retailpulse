@@ -22,7 +22,7 @@ event generator  -->  raw landing zone  -->  staging models (dbt)  -->  mart mod
 src/generator/      synthetic e-commerce event generator
 src/ingestion/      lands raw events (data/raw) into the warehouse (data/warehouse)
 src/pipeline.py     the four pipeline steps as plain functions, plus a CLI
-dbt/                dbt project: staging + mart models, schema and singular tests
+dbt/                dbt project: product seed, staging + mart models, schema and singular tests
 dags/               Airflow DAG wiring the pipeline steps, scheduled daily
 dashboard/          Streamlit app (app.py = layout, queries.py = warehouse reads)
 data/               local raw/warehouse storage (git-ignored, kept via .gitkeep)
@@ -34,7 +34,7 @@ docs/               architecture notes + the day-7 PDF report
 
 ```bash
 pip install -r requirements.txt
-python -m src.pipeline --count 1000      # generate -> ingest -> dbt run -> dbt test
+python -m src.pipeline --count 1000      # generate -> ingest -> dbt seed -> run -> test
 streamlit run dashboard/app.py
 ```
 
@@ -43,10 +43,11 @@ Individual steps, if you want them separately:
 ```bash
 python -m src.generator.event_generator --count 500 --days 14 --out data/raw/events.jsonl
 python -m src.ingestion.ingest --source data/raw/events.jsonl
+python -m src.generator.catalog          # re-export dbt/seeds/products.csv
 cd dbt && dbt build --profiles-dir .
 ```
 
-The Airflow DAG (`dags/retailpulse_pipeline.py`) runs the same four steps on a
+The Airflow DAG (`dags/retailpulse_pipeline.py`) runs the same steps on a
 daily schedule — see [`dags/README.md`](dags/README.md). It needs Linux, WSL, or
 Docker; Airflow has no native Windows support, which is exactly why the steps
 live in `src/pipeline.py` and the DAG is only wiring.
@@ -55,6 +56,7 @@ live in `src/pipeline.py` and the DAG is only wiring.
 
 | Table | Grain | What it answers |
 |---|---|---|
+| `products` (seed) | one product | the product dimension: category and list price, exported from `src/generator/catalog.py` |
 | `stg_events` | one event | typed, renamed view over `raw_events` |
 | `stg_quarantined_events` | one rejected event | what failed validation, and why |
 | `stg_pipeline_runs` | one ingest | batch row counts and reject rate |
@@ -71,7 +73,7 @@ an all-time table can only answer one question.
 python -m pytest tests/ -q
 ```
 
-53 tests plus one that's skipped unless Airflow is installed. The suite covers
+56 tests plus one that's skipped unless Airflow is installed. The suite covers
 generator distributions and determinism, ingest validation/quarantine/
 idempotency, the pipeline steps and their run auditing, a `dbt parse` guard, the
 DAG's task wiring (at AST level, so it runs without Airflow), and the dashboard
