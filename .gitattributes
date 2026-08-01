@@ -1,0 +1,6 @@
+# tests/test_catalog.py byte-compares the committed dbt seed against a fresh
+# export from src/generator/catalog.py. With core.autocrlf=true (the Windows
+# default) git checks the file out with CRLF while the exporter writes LF, so
+# the guard would fail on a fresh clone for a reason that has nothing to do
+# with the catalog. Pin the seed to LF everywhere.
+dbt/seeds/*.csv text eol=lf
