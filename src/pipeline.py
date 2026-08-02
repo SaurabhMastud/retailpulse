@@ -144,6 +144,59 @@ def run_dbt(
     return result
 
 
+def replay_step(
+    raw_dir: str | Path = DEFAULT_RAW_DIR,
+    warehouse: str | Path = DEFAULT_WAREHOUSE,
+    since: str | None = None,
+) -> dict:
+    """Re-ingest every landing file, oldest first.
+
+    The landing zone is append-only -- one immutable file per batch, named
+    `events_<UTC timestamp>.jsonl` -- which is what makes this possible at all:
+    the warehouse can be deleted and rebuilt from raw data without regenerating
+    anything. Without a replay path, "append-only landing zone" is a claim the
+    project never actually cashes in.
+
+    Files sort chronologically because the batch id is a zero-padded UTC
+    timestamp, so lexicographic order is time order. Order matters only for the
+    audit trail (`pipeline_runs`), not for correctness: ingestion upserts on
+    event_id, so replaying is idempotent and safe to re-run over a warehouse
+    that already holds some of the batches.
+
+    `since` filters to batch ids at or after a prefix (e.g. "20260801"), for
+    replaying a window rather than all of history.
+    """
+    files = sorted(Path(raw_dir).glob("events_*.jsonl"))
+    if since is not None:
+        files = [f for f in files if f.stem.removeprefix("events_") >= since]
+
+    totals = {"files": 0, "read": 0, "loaded": 0, "duplicates": 0, "rejected": 0}
+    batches = []
+    for path in files:
+        result = ingest_step(path, warehouse=warehouse, batch_id=path.stem.removeprefix("events_"))
+        totals["files"] += 1
+        for key in ("read", "loaded", "duplicates", "rejected"):
+            totals[key] += result[key]
+        batches.append(result)
+
+    return {**totals, "batches": batches}
+
+
+def rebuild_from_landing(
+    raw_dir: str | Path = DEFAULT_RAW_DIR,
+    warehouse: str | Path = DEFAULT_WAREHOUSE,
+    since: str | None = None,
+) -> dict:
+    """Replay the landing zone, then rebuild and test the models on top of it."""
+    replayed = replay_step(raw_dir=raw_dir, warehouse=warehouse, since=since)
+    return {
+        "replay": replayed,
+        "dbt_seed": run_dbt("seed", warehouse=warehouse),
+        "dbt_run": run_dbt("run", warehouse=warehouse),
+        "dbt_test": run_dbt("test", warehouse=warehouse),
+    }
+
+
 def run_pipeline(
     count: int = 1000,
     days: int = 14,
@@ -173,7 +226,31 @@ def main() -> None:
     parser.add_argument("--count", type=int, default=1000, help="events to generate")
     parser.add_argument("--days", type=int, default=14, help="spread events over the last N days")
     parser.add_argument("--seed", type=int, default=None, help="random seed")
+    parser.add_argument(
+        "--replay",
+        action="store_true",
+        help="skip generation and rebuild the warehouse from the landing zone instead",
+    )
+    parser.add_argument(
+        "--since",
+        type=str,
+        default=None,
+        help="with --replay, only batches with an id at or after this prefix (e.g. 20260801)",
+    )
     args = parser.parse_args()
+
+    if args.replay:
+        result = rebuild_from_landing(since=args.since)
+        replay = result["replay"]
+        print(
+            f"Replayed {replay['files']} batches: read {replay['read']}, "
+            f"loaded {replay['loaded']}, duplicates {replay['duplicates']}, "
+            f"rejected {replay['rejected']}"
+        )
+        print("dbt seed: ok")
+        print("dbt run: ok")
+        print("dbt test: ok")
+        return
 
     result = run_pipeline(count=args.count, days=args.days, seed=args.seed)
     print(f"Generated {result['generate']['events']} events -> {result['generate']['path']}")

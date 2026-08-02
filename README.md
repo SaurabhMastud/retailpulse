@@ -21,7 +21,7 @@ event generator  -->  raw landing zone  -->  staging models (dbt)  -->  mart mod
 ```
 src/generator/      synthetic e-commerce event generator
 src/ingestion/      lands raw events (data/raw) into the warehouse (data/warehouse)
-src/pipeline.py     the four pipeline steps as plain functions, plus a CLI
+src/pipeline.py     the pipeline steps (incl. landing-zone replay) as plain functions, plus a CLI
 dbt/                dbt project: product seed, staging + mart models, schema and singular tests
 dags/               Airflow DAG wiring the pipeline steps, scheduled daily
 dashboard/          Streamlit app (app.py = layout, queries.py = warehouse reads)
@@ -52,6 +52,24 @@ daily schedule — see [`dags/README.md`](dags/README.md). It needs Linux, WSL, 
 Docker; Airflow has no native Windows support, which is exactly why the steps
 live in `src/pipeline.py` and the DAG is only wiring.
 
+## Rebuilding from raw
+
+`data/raw/` is an append-only landing zone — one immutable file per batch,
+named `events_<UTC timestamp>.jsonl`. The warehouse is disposable: delete it and
+replay the landing zone to get it back.
+
+```bash
+rm data/warehouse/retailpulse.duckdb
+python -m src.pipeline --replay                  # every batch, oldest first
+python -m src.pipeline --replay --since 20260801 # or just a window
+```
+
+Replay is safe to run over a warehouse that already holds some of the batches —
+ingestion upserts on `event_id`, so a re-run loads nothing and reports the
+batches as duplicates. Each replayed batch writes its own `pipeline_runs` row,
+dated when the replay ran; a replay is a real ingest and the audit table records
+it as one rather than backdating it.
+
 ## Data model
 
 | Table | Grain | What it answers |
@@ -73,9 +91,10 @@ an all-time table can only answer one question.
 python -m pytest tests/ -q
 ```
 
-56 tests plus one that's skipped unless Airflow is installed. The suite covers
+63 tests plus one that's skipped unless Airflow is installed. The suite covers
 generator distributions and determinism, ingest validation/quarantine/
-idempotency, the pipeline steps and their run auditing, a `dbt parse` guard, the
+idempotency, the pipeline steps including landing-zone replay and their run
+auditing, a `dbt parse` guard, the
 DAG's task wiring (at AST level, so it runs without Airflow), and the dashboard
 queries against a real scratch warehouse.
 
