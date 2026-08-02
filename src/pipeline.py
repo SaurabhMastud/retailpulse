@@ -1,4 +1,4 @@
-"""The end-to-end pipeline as four plain functions: generate -> ingest -> dbt run -> dbt test.
+"""The end-to-end pipeline as plain functions: generate -> ingest -> dbt seed/run -> dbt test.
 
 The Airflow DAG (`dags/`) is a thin wrapper over these, not a reimplementation.
 Keeping the steps here means the whole pipeline stays runnable and testable
@@ -144,6 +144,21 @@ def run_dbt(
     return result
 
 
+def build_models(warehouse: str | Path = DEFAULT_WAREHOUSE) -> dict:
+    """Load seeds, then build models -- in that order, which is not optional.
+
+    Marts `ref` the products seed, so `dbt run` against a warehouse that has
+    never been seeded fails with "Table with name products does not exist".
+    That ordering rule lived in four places and was already forgotten in one of
+    them (the dashboard test fixture) the day the seed was introduced; it lives
+    here now so there is one place to get it right.
+    """
+    return {
+        "dbt_seed": run_dbt("seed", warehouse=warehouse),
+        "dbt_run": run_dbt("run", warehouse=warehouse),
+    }
+
+
 def replay_step(
     raw_dir: str | Path = DEFAULT_RAW_DIR,
     warehouse: str | Path = DEFAULT_WAREHOUSE,
@@ -191,8 +206,7 @@ def rebuild_from_landing(
     replayed = replay_step(raw_dir=raw_dir, warehouse=warehouse, since=since)
     return {
         "replay": replayed,
-        "dbt_seed": run_dbt("seed", warehouse=warehouse),
-        "dbt_run": run_dbt("run", warehouse=warehouse),
+        **build_models(warehouse=warehouse),
         "dbt_test": run_dbt("test", warehouse=warehouse),
     }
 
@@ -207,16 +221,12 @@ def run_pipeline(
     """Run all four steps in order. Raises on the first failure."""
     generated = generate_step(count=count, days=days, seed=seed, raw_dir=raw_dir)
     ingested = ingest_step(generated["path"], warehouse=warehouse, batch_id=generated["batch_id"])
-    # seeds first: the product dimension is a reference table the staging tests
-    # check events against, so it has to exist before anything refs it
-    dbt_seed = run_dbt("seed", warehouse=warehouse)
-    dbt_run = run_dbt("run", warehouse=warehouse)
+    built = build_models(warehouse=warehouse)
     dbt_test = run_dbt("test", warehouse=warehouse)
     return {
         "generate": generated,
         "ingest": ingested,
-        "dbt_seed": dbt_seed,
-        "dbt_run": dbt_run,
+        **built,
         "dbt_test": dbt_test,
     }
 

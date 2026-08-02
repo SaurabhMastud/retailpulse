@@ -80,10 +80,14 @@ it as one rather than backdating it.
 | `stg_pipeline_runs` | one ingest | batch row counts and reject rate |
 | `daily_revenue` | date | revenue, purchases, purchasing users per day |
 | `funnel_conversion` | session start date | view → cart → purchase counts and rates per day |
-| `top_products` | date × product | purchases, units, revenue per product per day |
+| `top_products` | date × product | purchases, units, revenue per product per day (category joined from `products`) |
 
 Marts sit at the finest useful grain so any window can be rolled up downstream;
 an all-time table can only answer one question.
+
+`products` is the single source of truth for what a product is. Events carry a
+copy of `product_category`, but the marts join the dimension instead, and a dbt
+test fails if the two ever disagree.
 
 ## Tests
 

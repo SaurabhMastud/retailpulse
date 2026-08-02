@@ -32,10 +32,12 @@ models:
   - name: top_products
     description: >
       One row per (event_date, product_id) with purchase counts, units sold and
-      gross revenue. Daily grain so any window can be rolled up downstream. The
+      gross revenue. Daily grain so any window can be rolled up downstream.
+      product_category is joined from the products seed rather than taken from
+      the event, so the catalog is the single source of truth for it. The
       composite key is asserted by tests/assert_top_products_grain_is_unique.sql
-      and the product_id -> product_category assumption by
-      tests/assert_product_id_maps_to_one_category.sql.
+      and events agreeing with the catalog by
+      tests/assert_event_category_matches_products.sql.
     columns:
       - name: event_date
         tests:

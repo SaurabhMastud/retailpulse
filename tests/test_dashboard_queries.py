@@ -17,7 +17,7 @@ def warehouse(tmp_path_factory):
     wh = tmp / "retailpulse.duckdb"
     generated = pipeline.generate_step(count=600, days=10, seed=77, raw_dir=tmp, batch_id="t1")
     pipeline.ingest_step(generated["path"], warehouse=wh, batch_id="t1")
-    pipeline.run_dbt("run", warehouse=wh)
+    pipeline.build_models(warehouse=wh)
     return wh
 
 
@@ -54,7 +54,7 @@ def test_funnel_totals_survives_an_empty_window(tmp_path):
     empty = tmp_path / "empty.duckdb"
     generated = pipeline.generate_step(count=5, days=1, seed=1, raw_dir=tmp_path, batch_id="e1")
     pipeline.ingest_step(generated["path"], warehouse=empty, batch_id="e1")
-    pipeline.run_dbt("run", warehouse=empty)
+    pipeline.build_models(warehouse=empty)
 
     totals = queries.funnel_totals(empty, days=0)
     assert totals["view_to_cart_rate"] is None or totals["view_to_cart_rate"] >= 0
