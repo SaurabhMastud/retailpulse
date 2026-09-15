@@ -36,6 +36,7 @@ docs/               architecture notes + the day-7 PDF report
 pip install -r requirements.txt
 python -m src.pipeline --count 1000      # generate -> ingest -> dbt seed -> run -> test
 streamlit run dashboard/app.py
+python -m docs.generate_report           # renders docs/retailpulse-report.pdf from ARCHITECTURE.md
 ```
 
 Individual steps, if you want them separately:
@@ -95,12 +96,21 @@ test fails if the two ever disagree.
 python -m pytest tests/ -q
 ```
 
-63 tests plus one that's skipped unless Airflow is installed. The suite covers
+64 tests plus one that's skipped unless Airflow is installed. The suite covers
 generator distributions and determinism, ingest validation/quarantine/
 idempotency, the pipeline steps including landing-zone replay and their run
 auditing, a `dbt parse` guard, the
-DAG's task wiring (at AST level, so it runs without Airflow), and the dashboard
-queries against a real scratch warehouse.
+DAG's task wiring (at AST level, so it runs without Airflow), the dashboard
+queries against a real scratch warehouse, and the day-7 PDF report generator.
+
+```bash
+cd dbt && dbt test
+```
+
+33 dbt data tests, including two pipeline-health guardrails: a run that reads
+a batch but loads/duplicates/rejects nothing (`assert_latest_run_loaded_something`),
+and events falling further behind "now" than the generator's own `--days`
+window (`assert_stg_events_not_stale`).
 
 ## Status
 

@@ -65,10 +65,11 @@ Events are generated in sessions (1-4 events, same user, clustered timestamps) r
 | 6 | Streamlit dashboard on top of the marts | done day 4 |
 | 7 | Polish, README pass, `docs/retailpulse-report.pdf`, tag `week01-complete` | — |
 
-Days 5 and 6 landed early, so days 5-6 are now open for depth rather than
-breadth: incremental dbt models, a `dim_products` dimension so category lives
-in one place instead of riding along on every event, backfill/replay from the
-landing zone, and freshness/volume tests on the marts.
+Days 5 and 6 landed early, so days 5-6 were spent on depth rather than
+breadth: a `dim_products` dimension (day 5), backfill/replay from the landing
+zone (day 5), and the PDF report toolchain plus freshness/volume tests on the
+pipeline (day 6). Incremental dbt models were considered and rejected — see
+the decisions log.
 
 ## Decisions log
 
@@ -94,3 +95,7 @@ landing zone, and freshness/volume tests on the marts.
 - **Replay's audit rows are dated when the replay ran, not when the batch originally landed**: `pipeline_runs` is a record of ingests, and a replay genuinely is a new ingest. Backdating it would make the audit table lie about what happened. The original `ingested_at` is lost with the warehouse — accepted, since the landing zone (not the audit table) is the source of truth being replayed.
 - **Marts stay full-refresh; incremental models were considered and rejected** (day 5): the whole warehouse is a few thousand rows in DuckDB and rebuilds in under a second. Incremental would buy nothing measurable and cost real complexity — a `unique_key`, a lookback window for late-arriving events, and a `--full-refresh` path that has to be remembered whenever a model changes. Incremental models are also a common source of silently stale marts. Revisit if a full rebuild ever becomes slow enough to notice.
 - **`tests/test_catalog.py` asserts the committed CSV byte-matches a fresh export**: the seed is generated but checked in, so the realistic failure is someone editing it by hand or changing the catalog without re-exporting. Catching that in pytest beats discovering it as a `relationships` failure on production-shaped data.
+- **`docs/generate_report.py` uses `fpdf2`, not a headless-browser/Pandoc toolchain** (day 6): the day-7 deliverable is one document from one Markdown source, so a minimal pure-Python renderer beats a new system dependency. Two fpdf2 pitfalls worth remembering: `multi_cell`'s default `new_x` leaves the cursor at the end of the rendered text rather than the left margin, so back-to-back calls starve each other of width unless `new_x=XPos.LMARGIN` is passed explicitly; and the core Helvetica/Courier fonts only support `latin-1`, not `cp1252`, so the doc's em-dashes and arrows need transliterating before render rather than assuming any 8-bit codepage will do.
+- **Volume and freshness are two separate singular tests, not one** (day 6): a run that reads a batch and legitimately loads nothing (an empty source) looks identical to a stalled pipeline (no new batches at all) if you only check `pipeline_runs`, and a warehouse can be voluminous yet stale if ingestion stops but nothing deletes old rows. `assert_latest_run_loaded_something` catches the first by checking the *latest* run's counts; `assert_stg_events_not_stale` catches the second by checking the newest `event_at` against a `freshness_window_days` var (default 14, matching the generator's own `--days` window) rather than the run log. Verified independently: the volume test via an injected zero-everything row, the freshness test via `--vars freshness_window_days:0`.
+- **The freshness guardrail immediately caught a real problem** (day 6): the local warehouse hadn't been touched since day 5 — about six weeks of real elapsed time — so `assert_stg_events_not_stale` failed against it on the very first run, correctly. The fix was to actually run the pipeline again, not to loosen the threshold; a test that can be satisfied by widening its own window until it passes isn't testing anything.
+- **No DAG or `pipeline.py` change needed for either new guardrail**: both are dbt data tests, and `run_dbt()` already raises on any non-zero `dbt test` exit code, which already fails `run_pipeline()`/the DAG's `dbt_test` task. Wiring a new failure mode into an already-general failure path would have been work with no behavior change.
