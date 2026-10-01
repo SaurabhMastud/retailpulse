@@ -96,12 +96,14 @@ test fails if the two ever disagree.
 python -m pytest tests/ -q
 ```
 
-64 tests plus one that's skipped unless Airflow is installed. The suite covers
+67 tests plus one that's skipped unless Airflow is installed. The suite covers
 generator distributions and determinism, ingest validation/quarantine/
 idempotency, the pipeline steps including landing-zone replay and their run
 auditing, a `dbt parse` guard, the
 DAG's task wiring (at AST level, so it runs without Airflow), the dashboard
-queries against a real scratch warehouse, and the day-7 PDF report generator.
+queries against a real scratch warehouse, and the day-7 PDF report generator —
+including that no character in `ARCHITECTURE.md` silently renders as `?` in the
+PDF, and that the two test counts quoted on this page still match reality.
 
 ```bash
 cd dbt && dbt test
@@ -115,4 +117,8 @@ window (`assert_stg_events_not_stale`).
 ## Status
 
 Built over a week of daily sessions. `docs/ARCHITECTURE.md` carries the
-decisions log, written as the project went rather than reconstructed at the end.
+decisions log, written as the project went rather than reconstructed at the end,
+plus two sections worth reading before the code: **Known limitations** (what the
+components table lists but the project doesn't exercise — chiefly that the
+Airflow DAG has never been executed) and **Lessons learned** (the bugs that cost
+real time, and what each one generalises to).
