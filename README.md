@@ -109,6 +109,13 @@ matches `requirements.txt`, that no character in `ARCHITECTURE.md` silently
 renders as `?`, and that the two test counts quoted on this page still match
 reality.
 
+Three of those are Streamlit render tests that skip until a warehouse exists, so
+a fresh clone reports four skips rather than one — run `python -m src.pipeline`
+first and they execute. Verified on a clean clone of this repo: the pipeline runs
+end to end, all 33 dbt tests pass, and `docs/retailpulse-report.pdf` regenerates
+byte-identical to the committed copy even though git checks the source doc out
+with CRLF line endings there and LF here.
+
 ```bash
 cd dbt && dbt test
 ```
