@@ -37,7 +37,21 @@ pip install -r requirements.txt
 python -m src.pipeline --count 1000      # generate -> ingest -> dbt seed -> run -> test
 streamlit run dashboard/app.py
 python -m docs.generate_report           # renders docs/retailpulse-report.pdf from ARCHITECTURE.md
+python -m docs.generate_ieee_report      # compiles docs/retailpulse-ieee-report.pdf (needs pdflatex)
 ```
+
+Two reports are committed, for two different readers:
+
+| Report | Source | Built with |
+|---|---|---|
+| `docs/retailpulse-report.pdf` | `docs/ARCHITECTURE.md` | `fpdf2`, no system dependency |
+| `docs/retailpulse-ieee-report.pdf` | `docs/retailpulse-ieee.tex` | IEEEtran + `pdflatex` |
+
+The first is the full written record — every component, every decision, as it was
+made. The second is a 4-page IEEE-format paper: abstract, the data-quality
+taxonomy, the six defects that reached a committed state and what caught each,
+and an explicit threats-to-validity section. Both PDFs are committed, so reading
+them needs no toolchain; only rebuilding the IEEE one needs LaTeX.
 
 Individual steps, if you want them separately:
 
@@ -96,7 +110,7 @@ test fails if the two ever disagree.
 python -m pytest tests/ -q
 ```
 
-74 tests plus one that's skipped unless Airflow is installed. The suite covers
+80 tests plus one that's skipped unless Airflow is installed. The suite covers
 generator distributions and determinism, ingest validation/quarantine/
 idempotency, the pipeline steps including landing-zone replay and their run
 auditing, a `dbt parse` guard, the

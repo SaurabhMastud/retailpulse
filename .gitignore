@@ -45,3 +45,7 @@ Thumbs.db
 
 ## Reports (large binaries built at end of week, kept but ignore intermediates)
 *.tmp
+
+## LaTeX build artifacts for the IEEE report -- the .tex and the .pdf are
+## committed, everything pdflatex regenerates is not.
+docs/latex-build/
