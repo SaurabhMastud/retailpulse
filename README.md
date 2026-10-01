@@ -96,14 +96,18 @@ test fails if the two ever disagree.
 python -m pytest tests/ -q
 ```
 
-67 tests plus one that's skipped unless Airflow is installed. The suite covers
+74 tests plus one that's skipped unless Airflow is installed. The suite covers
 generator distributions and determinism, ingest validation/quarantine/
 idempotency, the pipeline steps including landing-zone replay and their run
 auditing, a `dbt parse` guard, the
 DAG's task wiring (at AST level, so it runs without Airflow), the dashboard
 queries against a real scratch warehouse, and the day-7 PDF report generator —
-including that no character in `ARCHITECTURE.md` silently renders as `?` in the
-PDF, and that the two test counts quoted on this page still match reality.
+that Markdown tables come out as real tables rather than pipe text, that the
+pipe-drawn data-flow diagram is *not* parsed as one, that `snake_case`
+identifiers survive the inline-Markdown stripper, that the stack appendix
+matches `requirements.txt`, that no character in `ARCHITECTURE.md` silently
+renders as `?`, and that the two test counts quoted on this page still match
+reality.
 
 ```bash
 cd dbt && dbt test
